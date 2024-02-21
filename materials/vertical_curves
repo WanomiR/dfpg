@@ -1,0 +1,137 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.interpolate import make_interp_spline
+from matplotlib.backend_bases import MouseButton
+from copy import deepcopy
+from scipy.interpolate import RBFInterpolator
+from scipy import interpolate
+r=0.7
+l=0.7
+is_it=False
+is_add = False
+ajaster_is_it=False
+remember=0
+in_points=[0,100]
+out_points=[0,0]
+last_coefs=[0,0]
+
+adjaster = np.array([[0,5,0,0],[100,5,0,0]])
+poly=interpolate.interp1d(in_points,out_points)  #Akima1DInterpolator PchipInterpolator
+#poly=make_interp_spline(in_points,out_points)
+#poly=np.polynomial.polynomial.Polynomial.fit(in_points,out_points,9)
+draw_x=range(100)
+draw_y=poly(draw_x)
+"""poly2=make_interp_spline(draw_x,draw_y)
+draw_y=poly2(draw_x)"""
+
+
+
+fig, ax = plt.subplots()
+ax.plot(draw_x, draw_y)
+ax.plot(in_points, out_points,'o')
+ax.plot((adjaster[0,0],adjaster[1,0]),(adjaster[0,1],adjaster[1,1]),"o")
+ax.set_xlim(0,100)
+ax.set_ylim(-50,50)
+
+
+def on_move(event):
+    global in_points,out_points,is_it,is_add,adjaster,remember
+    if is_it==True:
+        if event.inaxes:
+                if event.xdata!=any(in_points):
+                    if is_add==True:
+                        del in_points[-1]
+                        del out_points[-1]
+                        adjaster=np.delete(adjaster,[-1],axis=0)
+                    in_points.append(int(event.xdata))
+                    out_points.append(int(event.ydata))
+                    adjaster=np.vstack((adjaster,[int(event.xdata)+last_coefs[0],int(event.ydata)+(5)+last_coefs[1],last_coefs[0],last_coefs[1]]))
+                    redraw()
+                    print(event.xdata)
+                    is_add = True
+    if ajaster_is_it==True:
+        if event.inaxes:
+                adjaster[remember][0]=int(event.xdata)
+                if -5<(event.ydata-out_points[remember])<15:
+                    adjaster[remember][1]=int(event.ydata)+5
+                adjaster[remember][2]=adjaster[remember][0]-in_points[remember]
+                adjaster[remember][3]=adjaster[remember][1]-out_points[remember]-5
+                last_coefs[0]=adjaster[remember][0]-in_points[remember]
+                last_coefs[1]=adjaster[remember][1]-out_points[remember]-5
+                redraw()
+                print(adjaster)
+
+        #print(f'data coords {event.xdata} {event.ydata},',
+         #     f'pixel coords {event.x} {event.y}')
+def redraw():
+        global in_points,out_points,adjaster,r,l
+        in_t = deepcopy(in_points)
+        out_t = deepcopy(out_points)
+        
+        #poly=make_interp_spline(in_t,out_t)
+        #poly=np.polynomial.polynomial.Polynomial.fit(in_points,out_points,9)
+        draw_x=np.linspace(-100,200,300)
+        draw_y=np.linspace(-100,200,300)*0
+        
+        for ads in range(len(in_t)):
+                l = 0.3
+                r = 0.3
+                if adjaster[ads][2]<0:
+                    l -= adjaster[ads][2]/50
+                else:
+                     r+=adjaster[ads][2]/50
+                l+=adjaster[ads][3]/20
+                r+=adjaster[ads][3]/20
+                draw_y+=(abs(out_t[ads])/(l**(-in_t[ads]+draw_x)+r**(in_t[ads]-draw_x)+abs(out_t[ads])))*out_t[ads]
+        draw_y[draw_y>50]=50
+        draw_y[draw_y<-50]=50
+        draw_y=draw_y[0:100]+draw_y[100:200]+draw_y[200:300]
+        print(draw_y)
+        draw_x=draw_x[100:200]
+        ax.clear()
+        for i in range(len(in_t)):
+            ax.plot([in_t[i],adjaster[i,0] ],[out_t[i],adjaster[i,1]],color='gray',linewidth=1.0)
+        ax.plot(adjaster[:,0],adjaster[:,1],"o")
+        ax.plot(in_t, out_t,'o')
+        ax.plot(draw_x, draw_y)
+        ax.set_xlim(0,100)
+        ax.set_ylim(-50,50)
+        fig.canvas.draw()
+
+
+def on_click(event):
+    global in_points,out_points,is_it,is_add,adjaster,last_coefs,ajaster_is_it,remember
+    if event.button is MouseButton.LEFT:
+            
+        for i in range(len(out_points)):
+            if (abs(event.xdata-adjaster[i][0])<2 and abs(event.ydata-adjaster[i][1])<2) or (abs(event.xdata-adjaster[i][0])<2 and abs(event.ydata-adjaster[i][1]+5)<2 and ajaster_is_it==True):
+                ajaster_is_it = not ajaster_is_it
+                remember=i
+                return
+
+        if ajaster_is_it==False:    
+            is_it = not is_it
+            if is_it==True:
+                is_add = False
+
+                for i in range(len(out_points)):
+                    if abs(event.xdata-in_points[i])<2 and abs(event.ydata-out_points[i])<2:
+                            del in_points[i]
+                            del out_points[i]
+                            last_coefs = deepcopy([adjaster[i,2],adjaster[i,3]])
+                            print(last_coefs)
+                            adjaster=np.delete(adjaster,[i],axis=0)
+                            redraw()
+    if event.button is MouseButton.RIGHT:
+                for i in range(len(out_points)):
+                    print(abs(event.xdata-in_points[i]),"oouuu",i)
+                    if abs(event.xdata-in_points[i])<1 and abs(event.ydata-out_points[i])<1:
+                            del in_points[i]
+                            del out_points[i]
+                            adjaster=np.delete(adjaster,[i],axis=0)
+                            redraw()
+
+binding_id = plt.connect('motion_notify_event',on_move)
+plt.connect('button_press_event', on_click)
+
+plt.show()
